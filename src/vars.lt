@@ -1,0 +1,7 @@
+const i = "Hello from Lethargon!\n";
+var x = 132;
+var y = x * 4;
+var z = y - 5;
+out(i);
+out(y);
+out("\n");

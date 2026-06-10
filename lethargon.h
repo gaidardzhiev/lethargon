@@ -1,0 +1,193 @@
+/*
+ * Copyright (C) 2026 Ivan Gaydardzhiev
+ * Licensed under the GPL-3.0-only
+ */
+
+#ifndef LETHARGON_H
+#define LETHARGON_H
+
+#include <stdint.h>
+#include <stddef.h>
+
+typedef enum {
+	TK_NUM,
+	TK_STR,
+	TK_ID,
+	TK_VAR,
+	TK_CONST,
+	TK_FN,
+	TK_IF,
+	TK_ELIF,
+	TK_ELSE,
+	TK_WHILE,
+	TK_RETURN,
+	TK_TRUE,
+	TK_FALSE,
+	TK_OUT,
+	TK_IN,
+	TK_PLUS,
+	TK_MINUS,
+	TK_STAR,
+	TK_SLASH,
+	TK_PCT,
+	TK_EQ,
+	TK_NEQ,
+	TK_LT,
+	TK_LE,
+	TK_GT,
+	TK_GE,
+	TK_AND,
+	TK_OR,
+	TK_BANG,
+	TK_ASSIGN,
+	TK_LPAREN,
+	TK_RPAREN,
+	TK_LBRACE,
+	TK_RBRACE,
+	TK_SEMI,
+	TK_COMMA,
+	TK_EOF
+} Tk;
+
+typedef struct {
+	Tk t;
+	long num;
+	char *s;
+	int slen;
+	int line;
+} Tok;
+
+typedef struct {
+	uint8_t *d;
+	size_t cap, len;
+} Buf;
+
+typedef struct Nd Nd;
+
+typedef enum {
+	ND_NUM,
+	ND_BOOL,
+	ND_STR,
+	ND_ID,
+	ND_VAR,
+	ND_CONST,
+	ND_ASSIGN,
+	ND_BIN,
+	ND_UN,
+	ND_BLOCK,
+	ND_IF,
+	ND_WHILE,
+	ND_FN,
+	ND_CALL,
+	ND_RETURN,
+	ND_OUT,
+	ND_IN,
+	ND_PROG
+} Nt;
+
+typedef struct Nd {
+	Nt t;
+	long num;
+	int bval;
+	char *s;
+	int slen;
+	int soff;
+	Tk op;
+	struct Nd *a, *b, *c;
+	struct Nd **ch;
+	int nch;
+	char **params;
+	int npar;
+} Nd;
+
+typedef struct {
+	char *name;
+	int off;
+	int is_const;
+} Loc;
+
+typedef struct {
+	char *name;
+	int goff;
+	int is_const;
+	long cval;
+	int is_str;
+	int soff;
+} Glb;
+
+typedef struct Fr Fr;
+
+struct Fr {
+	Loc *locs;
+	int nloc;
+	int sz;
+};
+
+typedef struct {
+	char *src;
+	int pos;
+	int line;
+	Tok cur;
+	Tok peek;
+} Lx;
+
+typedef struct {
+	Buf code;
+	Buf rod;
+	int goff;
+	Glb *glbs;
+	int nglb;
+	uint32_t entry;
+} Cg;
+
+typedef struct {
+	char *name;
+	uint32_t addr;
+} Fsym;
+
+typedef struct {
+	Fsym *fns;
+	int nfn;
+} Ft;
+
+typedef struct {
+	uint32_t pos;
+	char *name;
+} Fpatch;
+
+typedef struct {
+	Fpatch *p;
+	int np;
+} Fpl;
+
+void buf_init(Buf *b);
+
+void buf_reserve(Buf *b, size_t n);
+
+void buf_append(Buf *b, const void *s, size_t n);
+
+void buf_u8(Buf *b, uint8_t x);
+
+void buf_u32(Buf *b, uint32_t x);
+
+void buf_patch32(Buf *b, size_t off, uint32_t x);
+
+Lx *lx_new(char *src);
+
+void lx_advance(Lx *l);
+
+Tok lx_next(Lx *l);
+
+Nd *parse(Lx *l);
+
+Nd *nd_new(Nt t);
+
+void cg_init(Cg *g);
+
+void codegen(Nd *prog, Cg *g);
+
+void emit_elf(Cg *g, const char *path);
+
+char *rc(const char *path);
+
+#endif

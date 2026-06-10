@@ -1,0 +1,5 @@
+fn main() {
+	out("Hello from the Lethargon World!\n");
+}
+
+main();
