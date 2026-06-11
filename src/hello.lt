@@ -1,5 +1,7 @@
-fn main() {
-	out("Hello from the Lethargon World!\n");
+int greet(int msg) {
+	putint(msg);
+	return 0;
 }
 
-main();
+int greeting = "Hello from the Lethargon World!\n";
+greet(greeting);

@@ -3,6 +3,7 @@
  * Licensed under the GPL-3.0-only
  */
 
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -175,18 +176,11 @@ static Tok lx_one(Lx *l) {
 		memcpy(id, s+start, len);
 		id[len]=0;
 		Tk t = TK_ID;
-		if (!strcmp(id,"var"))    t=TK_VAR;
-		else if (!strcmp(id,"const"))  t=TK_CONST;
-		else if (!strcmp(id,"fn"))     t=TK_FN;
+		if (!strcmp(id,"int"))    t=TK_INT;
 		else if (!strcmp(id,"if"))     t=TK_IF;
-		else if (!strcmp(id,"elif"))   t=TK_ELIF;
 		else if (!strcmp(id,"else"))   t=TK_ELSE;
 		else if (!strcmp(id,"while"))  t=TK_WHILE;
 		else if (!strcmp(id,"return")) t=TK_RETURN;
-		else if (!strcmp(id,"true"))   t=TK_TRUE;
-		else if (!strcmp(id,"false"))  t=TK_FALSE;
-		else if (!strcmp(id,"out"))    t=TK_OUT;
-		else if (!strcmp(id,"in"))     t=TK_IN;
 		Tok tok = make_tok(t, ln);
 		tok.s = id;
 		return tok;
@@ -224,6 +218,7 @@ static Tok lx_one(Lx *l) {
 		if (s[l->pos]=='|') { l->pos++; return make_tok(TK_OR, ln); }
 		dief("unexpected '|' on line %d", ln);
 		break;
+	default:
 		dief("unexpected char '%c' on line %d", c, ln);
 	}
 	return make_tok(TK_EOF, ln);
@@ -257,7 +252,7 @@ static int check(Lx *l, Tk t) {
 static int match(Lx *l, Tk t) {
 	if (check(l,t)) {
 		lx_advance(l);
-		return 1; 
+		return 1;
 	}
 	return 0;
 }
@@ -274,9 +269,7 @@ static void nd_add_ch(Nd *n, Nd *ch) {
 }
 
 static Nd *pexpr(Lx *l);
-
 static Nd *pstmt(Lx *l);
-
 static Nd *pblock(Lx *l);
 
 static Nd *pprim(Lx *l) {
@@ -292,44 +285,6 @@ static Nd *pprim(Lx *l) {
 		Nd *n = nd_new(ND_STR);
 		n->s = t.s;
 		n->slen = t.slen;
-		return n;
-	}
-	if (t.t == TK_TRUE || t.t == TK_FALSE) {
-		lx_advance(l);
-		Nd *n = nd_new(ND_BOOL);
-		n->bval = (t.t == TK_TRUE) ? 1 : 0;
-		return n;
-	}
-	if (t.t == TK_IN) {
-		lx_advance(l);
-		expect(l, TK_LPAREN);
-		expect(l, TK_RPAREN);
-		return nd_new(ND_IN);
-	}
-	if (t.t == TK_OUT) {
-		lx_advance(l);
-		expect(l, TK_LPAREN);
-		Nd *n = nd_new(ND_OUT);
-		n->a = pexpr(l);
-		expect(l, TK_RPAREN);
-		return n;
-	}
-	if (t.t == TK_FN) {
-		lx_advance(l);
-		Nd *n = nd_new(ND_FN);
-		n->s = NULL;
-		expect(l, TK_LPAREN);
-		n->params = NULL;
-		n->npar = 0;
-		if (!check(l, TK_RPAREN)) {
-			do {
-				Tok p = expect(l, TK_ID);
-				n->params = realloc(n->params, (n->npar+1)*sizeof(char*));
-				n->params[n->npar++] = p.s;
-			} while (match(l, TK_COMMA));
-		}
-		expect(l, TK_RPAREN);
-		n->a = pblock(l);
 		return n;
 	}
 	if (t.t == TK_ID) {
@@ -486,21 +441,11 @@ static Nd *pblock(Lx *l) {
 
 static Nd *pstmt(Lx *l) {
 	Tok t = cur(l);
-	if (t.t == TK_VAR) {
+	if (t.t == TK_INT) {
 		lx_advance(l);
 		Tok nm = expect(l, TK_ID);
 		expect(l, TK_ASSIGN);
-		Nd *n = nd_new(ND_VAR);
-		n->s = nm.s;
-		n->a = pexpr(l);
-		expect(l, TK_SEMI);
-		return n;
-	}
-	if (t.t == TK_CONST) {
-		lx_advance(l);
-		Tok nm = expect(l, TK_ID);
-		expect(l, TK_ASSIGN);
-		Nd *n = nd_new(ND_CONST);
+		Nd *n = nd_new(ND_DECL);
 		n->s = nm.s;
 		n->a = pexpr(l);
 		expect(l, TK_SEMI);
@@ -520,19 +465,12 @@ static Nd *pstmt(Lx *l) {
 		n->a = pexpr(l);
 		match(l, TK_RPAREN);
 		n->b = pblock(l);
-		Nd *cur_node = n;
-		while (check(l, TK_ELIF)) {
-			lx_advance(l);
-			Nd *elif = nd_new(ND_IF);
-			match(l, TK_LPAREN);
-			elif->a = pexpr(l);
-			match(l, TK_RPAREN);
-			elif->b = pblock(l);
-			cur_node->c = elif;
-			cur_node = elif;
-		}
 		if (match(l, TK_ELSE)) {
-			cur_node->c = pblock(l);
+			if (check(l, TK_IF)) {
+				n->c = pstmt(l);
+			} else {
+				n->c = pblock(l);
+			}
 		}
 		return n;
 	}
@@ -554,23 +492,34 @@ static Nd *pstmt(Lx *l) {
 }
 
 static Nd *ptoplevel(Lx *l) {
-	if (check(l, TK_FN)) {
+	if (check(l, TK_INT) && l->peek.t == TK_ID) {
+		Tok ahead = l->peek;
+		(void)ahead;
 		lx_advance(l);
 		Tok nm = expect(l, TK_ID);
-		Nd *n = nd_new(ND_FN);
-		n->s = nm.s;
-		expect(l, TK_LPAREN);
-		n->params = NULL;
-		n->npar = 0;
-		if (!check(l, TK_RPAREN)) {
-			do {
-				Tok p = expect(l, TK_ID);
-				n->params = realloc(n->params, (n->npar+1)*sizeof(char*));
-				n->params[n->npar++] = p.s;
-			} while (match(l, TK_COMMA));
+		if (check(l, TK_LPAREN)) {
+			lx_advance(l);
+			Nd *n = nd_new(ND_FN);
+			n->s = nm.s;
+			n->params = NULL;
+			n->npar = 0;
+			if (!check(l, TK_RPAREN)) {
+				do {
+					expect(l, TK_INT);
+					Tok p = expect(l, TK_ID);
+					n->params = realloc(n->params, (n->npar+1)*sizeof(char*));
+					n->params[n->npar++] = p.s;
+				} while (match(l, TK_COMMA));
+			}
+			expect(l, TK_RPAREN);
+			n->a = pblock(l);
+			return n;
 		}
-		expect(l, TK_RPAREN);
-		n->a = pblock(l);
+		expect(l, TK_ASSIGN);
+		Nd *n = nd_new(ND_DECL);
+		n->s = nm.s;
+		n->a = pexpr(l);
+		expect(l, TK_SEMI);
 		return n;
 	}
 	return pstmt(l);
@@ -585,16 +534,19 @@ Nd *parse(Lx *l) {
 	return prog;
 }
 
-#define TEXT_BASE 0x10094u
-#define ROD_BASE 0x500000u
-#define BSS_BASE 0x600000u
-#define BSS_SCRATCH 32u
-#define BSS_SZ (MAX_GLBS * 4u + BSS_SCRATCH)
-#define MAX_LOCALS 256
-#define MAX_GLBS 1024
-#define MAX_LOOPS 1024
-#define MAX_FNS 256
+#define TEXT_BASE    0x10094u
+#define ROD_BASE     0x500000u
+#define BSS_BASE     0x600000u
+#define BSS_SCRATCH  32u
+#define BSS_SZ       (MAX_GLBS * 4u + BSS_SCRATCH)
+#define MAX_LOCALS   256
+#define MAX_GLBS     1024
+#define MAX_FNS      256
 #define MAX_FPATCHES 4096
+
+#define FN_REGLIST  ((1<<4)|(1<<11)|(1<<14))
+#define FN_POPLIST  ((1<<4)|(1<<11)|(1<<15))
+#define PARAM_BASE  12
 
 typedef struct {
 	Glb glbs[MAX_GLBS];
@@ -607,8 +559,16 @@ typedef struct {
 	int nfpatch;
 } Cg2;
 
+typedef struct {
+	char *names[MAX_LOCALS];
+	int offs[MAX_LOCALS];
+	int n;
+	int frame_sz;
+} Lenv;
+
 static int g_find(Cg2 *g, const char *nm) {
-	for (int i=0; i<g->nglb; i++)
+	int i;
+	for (i=0; i<g->nglb; i++)
 		if (!strcmp(g->glbs[i].name, nm)) return i;
 	return -1;
 }
@@ -635,7 +595,7 @@ static uint32_t cpos(Cg2 *g) {
 }
 
 static void A(Cg2 *g, uint32_t instr) {
-	buf_u32(&g->code, instr); 
+	buf_u32(&g->code, instr);
 }
 
 static void arm_push(Cg2 *g, uint32_t reglist) {
@@ -647,17 +607,16 @@ static void arm_pop(Cg2 *g, uint32_t reglist) {
 }
 
 static uint32_t arm_imm8r(uint32_t v) {
-	for (int rot=0; rot<16; rot++) {
-		uint32_t rv = (v >> (rot*2)) | (v << (32-rot*2));
-		if (rv <= 0xFF) return (rot << 8) | rv;
-		rv = (v << (rot*2)) | (v >> (32-rot*2));
+	int rot;
+	for (rot=0; rot<16; rot++) {
+		uint32_t rv = (v << (rot*2)) | (v >> (32-rot*2));
 		if (rv <= 0xFF) return (rot << 8) | rv;
 	}
 	return 0xFFFFFFFF;
 }
 
 static int can_imm8r(uint32_t v) {
-	return arm_imm8r(v) != 0xFFFFFFFF || v == 0;
+	return v == 0 || arm_imm8r(v) != 0xFFFFFFFF;
 }
 
 static void arm_mov_r(Cg2 *g, int rd, uint32_t val) {
@@ -750,12 +709,12 @@ static void patch_b(Buf *b, uint32_t pos, uint32_t target) {
 	buf_patch32(b, pos, cond | (uint32_t)(off & 0x00FFFFFF));
 }
 
-static void arm_bl_placeholder(Cg2 *g, char *nm, Cg2 *gs) {
-	if (gs->nfpatch >= MAX_FPATCHES) die("too many call patches");
+static void arm_bl_placeholder(Cg2 *g, char *nm) {
+	if (g->nfpatch >= MAX_FPATCHES) die("too many call patches");
 	uint32_t pos = cpos(g);
-	gs->fpatches[gs->nfpatch].pos = pos;
-	gs->fpatches[gs->nfpatch].name = nm;
-	gs->nfpatch++;
+	g->fpatches[g->nfpatch].pos = pos;
+	g->fpatches[g->nfpatch].name = nm;
+	g->nfpatch++;
 	A(g, 0xEB000000);
 }
 
@@ -781,20 +740,9 @@ static void arm_syscall_read1(Cg2 *g, int dst_r) {
 	arm_swi(g);
 }
 
-#define TAG_INT 0
-#define TAG_BOOL 1
-#define TAG_STR 2
-#define TAG_FN 3
-
-typedef struct {
-	char *names[MAX_LOCALS];
-	int offs[MAX_LOCALS];
-	int n;
-	int frame_sz;
-} Lenv;
-
 static int lenv_find(Lenv *e, const char *nm) {
-	for (int i=e->n-1; i>=0; i--)
+	int i;
+	for (i=e->n-1; i>=0; i--)
 		if (!strcmp(e->names[i], nm)) return e->offs[i];
 	return -9999;
 }
@@ -806,81 +754,189 @@ static void lenv_add(Lenv *e, const char *nm, int off) {
 	e->n++;
 }
 
-static void gen_expr(Cg2 *g, Nd *n, Lenv *env, int in_fn);
+static Val val_imm(int32_t i) {
+	Val v;
+	v.k = V_IMM;
+	v.i = i;
+	return v;
+}
 
-static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn);
+static Val val_reg(void) {
+	Val v;
+	v.k = V_REG;
+	v.i = 0;
+	return v;
+}
 
-static void load_var(Cg2 *g, const char *nm, Lenv *env, int in_fn) {
-	(void)in_fn;
-	int lo = lenv_find(env, nm);
-	if (lo != -9999) {
-		if (lo < 0) {
-			A(g, 0xE51B0000 | (0<<12) | (-lo));
+static Val val_fp(int32_t off) {
+	Val v;
+	v.k = V_FP;
+	v.i = off;
+	return v;
+}
+
+static Val val_abs(void) {
+	Val v;
+	v.k = V_ABS;
+	v.i = 0;
+	return v;
+}
+
+static void val_rval(Cg2 *g, Val v) {
+	switch (v.k) {
+	case V_IMM:
+		arm_mov_r(g, 0, (uint32_t)v.i);
+		break;
+	case V_REG:
+		break;
+	case V_FP:
+		if (v.i < 0) {
+			A(g, 0xE51B0000 | (0<<12) | (uint32_t)(-v.i));
 		} else {
-			A(g, 0xE59B0000 | (0<<12) | lo);
+			A(g, 0xE59B0000 | (0<<12) | (uint32_t)v.i);
 		}
-		return;
+		break;
+	case V_ABS:
+		A(g, 0xE5910000);
+		break;
 	}
+}
+
+static void val_store(Cg2 *g, Val lv) {
+	switch (lv.k) {
+	case V_FP:
+		if (lv.i < 0) {
+			A(g, 0xE50B0000 | (0<<12) | (uint32_t)(-lv.i));
+		} else {
+			A(g, 0xE58B0000 | (0<<12) | (uint32_t)lv.i);
+		}
+		break;
+	case V_ABS:
+		A(g, 0xE5810000);
+		break;
+	default:
+		die("val_store: not an lvalue");
+	}
+}
+
+static Val var_rval(Cg2 *g, const char *nm, Lenv *env) {
+	int lo = lenv_find(env, nm);
+	if (lo != -9999) return val_fp(lo);
 	int gi = g_find(g, nm);
 	if (gi >= 0) {
 		Glb *gl = &g->glbs[gi];
-		if (gl->is_const && !gl->is_str) {
-			arm_mov_r(g, 0, (uint32_t)gl->cval);
-			return;
-		}
+		if (gl->is_const && !gl->is_str) return val_imm((int32_t)gl->cval);
 		if (gl->is_const && gl->is_str) {
 			arm_mov_r(g, 0, ROD_BASE + gl->soff);
-			return;
+			return val_reg();
 		}
 		arm_mov_r(g, 1, BSS_BASE + gl->goff);
-		A(g, 0xE5910000);
-		return;
+		return val_abs();
 	}
 	dief("undefined variable '%s'", nm);
+	return val_reg();
 }
 
-static void store_var(Cg2 *g, const char *nm, Lenv *env, int in_fn) {
-	(void)in_fn;
+static Val var_lval(Cg2 *g, const char *nm, Lenv *env) {
 	int lo = lenv_find(env, nm);
-	if (lo != -9999) {
-		if (lo < 0) {
-			A(g, 0xE50B0000 | (0<<12) | (-lo));
-		} else {
-			A(g, 0xE58B0000 | (0<<12) | lo);
-		}
-		return;
-	}
+	if (lo != -9999) return val_fp(lo);
 	int gi = g_find(g, nm);
 	if (gi >= 0) {
 		Glb *gl = &g->glbs[gi];
 		if (gl->is_const) dief("assignment to const '%s'", nm);
 		arm_mov_r(g, 1, BSS_BASE + gl->goff);
-		A(g, 0xE5810000);
-		return;
+		return val_abs();
 	}
 	dief("undefined variable '%s'", nm);
+	return val_reg();
 }
 
-static void gen_expr(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
+static void emit_fn_entry(Cg2 *g, Lenv *env, char **params, int npar) {
+	int i;
+	arm_push(g, FN_REGLIST);
+	arm_mov_rr(g, 11, 13);
+	for (i=0; i<npar; i++) {
+		int off = PARAM_BASE + i*4;
+		lenv_add(env, params[i], off);
+	}
+}
+
+static void emit_fn_exit(Cg2 *g, Lenv *env) {
+	if (env->frame_sz > 0) {
+		uint32_t adj = env->frame_sz;
+		if (can_imm8r(adj)) {
+			A(g, 0xE28DD000 | arm_imm8r(adj));
+		} else {
+			arm_mov_r(g, 1, adj);
+			arm_add_rr(g, 13, 13, 1);
+		}
+	}
+	arm_pop(g, FN_POPLIST);
+}
+
+static Val gen_expr(Cg2 *g, Nd *n, Lenv *env);
+
+static void emit_call(Cg2 *g, Nd **args, int nargs, Lenv *env, char *name) {
+	int i;
+	for (i=nargs-1; i>=0; i--) {
+		Val v = gen_expr(g, args[i], env);
+		val_rval(g, v);
+		arm_push1(g, 0);
+	}
+	arm_bl_placeholder(g, name);
+	if (nargs > 0) {
+		uint32_t adj = nargs * 4;
+		if (can_imm8r(adj)) {
+			A(g, 0xE28DD000 | arm_imm8r(adj));
+		} else {
+			arm_mov_r(g, 1, adj);
+			arm_add_rr(g, 13, 13, 1);
+		}
+	}
+}
+
+static void emit_udiv(Cg2 *g) {
+	uint32_t bz;
+	uint32_t loop;
+	uint32_t blo;
+	uint32_t bk;
+	arm_mov_rr(g, 2, 0);
+	arm_mov_r(g, 0, 0);
+	A(g, 0xE3510000);
+	bz = emit_beq_placeholder(g);
+	loop = TEXT_BASE + cpos(g);
+	arm_cmp_rr(g, 2, 1);
+	blo = cpos(g);
+	A(g, 0x3A000000);
+	arm_sub_rr(g, 2, 2, 1);
+	A(g, 0xE2800001);
+	bk = emit_b_placeholder(g);
+	patch_b(&g->code, bk, loop);
+	patch_b(&g->code, blo, TEXT_BASE + cpos(g));
+	patch_b(&g->code, bz, TEXT_BASE + cpos(g));
+}
+
+static Val gen_expr(Cg2 *g, Nd *n, Lenv *env) {
 	switch (n->t) {
 	case ND_NUM:
-		arm_mov_r(g, 0, (uint32_t)n->num);
-		break;
-	case ND_BOOL:
-		arm_mov_r(g, 0, n->bval ? 1 : 0);
-		break;
+		return val_imm((int32_t)n->num);
 	case ND_STR:
 		arm_mov_r(g, 0, ROD_BASE + n->soff);
-		break;
-	case ND_ID:
-		load_var(g, n->s, env, in_fn);
-		break;
-	case ND_ASSIGN:
-		gen_expr(g, n->a, env, in_fn);
-		store_var(g, n->s, env, in_fn);
-		break;
-	case ND_UN:
-		gen_expr(g, n->a, env, in_fn);
+		return val_reg();
+	case ND_ID: {
+		Val v = var_rval(g, n->s, env);
+		return v;
+	}
+	case ND_ASSIGN: {
+		Val rv = gen_expr(g, n->a, env);
+		val_rval(g, rv);
+		Val lv = var_lval(g, n->s, env);
+		val_store(g, lv);
+		return val_reg();
+	}
+	case ND_UN: {
+		Val v = gen_expr(g, n->a, env);
+		val_rval(g, v);
 		if (n->op == TK_MINUS) {
 			A(g, 0xE2600000);
 		} else if (n->op == TK_BANG) {
@@ -888,11 +944,14 @@ static void gen_expr(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 			arm_mov_r(g, 0, 0);
 			A(g, 0x03A00001);
 		}
-		break;
+		return val_reg();
+	}
 	case ND_BIN: {
-		gen_expr(g, n->a, env, in_fn);
+		Val va = gen_expr(g, n->a, env);
+		val_rval(g, va);
 		arm_push1(g, 0);
-		gen_expr(g, n->b, env, in_fn);
+		Val vb = gen_expr(g, n->b, env);
+		val_rval(g, vb);
 		arm_pop1(g, 1);
 		switch (n->op) {
 		case TK_PLUS:  arm_add_rr(g, 0, 1, 0); break;
@@ -900,35 +959,16 @@ static void gen_expr(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 		case TK_STAR:  arm_mul_rr(g, 0, 1, 0); break;
 		case TK_SLASH:
 			arm_mov_rr(g, 2, 0);
-			arm_mov_rr(g, 0, 1); {
-				arm_cmp_rr(g, 0, 2);
-				uint32_t blt = emit_bne_placeholder(g);
-				arm_mov_r(g, 0, 0);
-				uint32_t bend = emit_b_placeholder(g);
-				patch_b(&g->code, blt, cpos(g));
-				arm_push1(g, 2);
-				arm_push1(g, 0);
-				arm_mov_r(g, 3, 0);
-				uint32_t lp2 = cpos(g);
-				arm_sub_rr(g, 0, 0, 2);
-				A(g, 0xE2833001);
-				arm_cmp_rr(g, 0, 2);
-				uint32_t bge = emit_bne_placeholder(g);
-				patch_b(&g->code, bge, lp2);
-				arm_mov_rr(g, 0, 3);
-				patch_b(&g->code, bend, cpos(g));
-			}
+			arm_mov_rr(g, 0, 1);
+			arm_mov_rr(g, 1, 2);
+			emit_udiv(g);
 			break;
 		case TK_PCT:
 			arm_mov_rr(g, 2, 0);
-			arm_mov_rr(g, 0, 1); {
-				uint32_t lp2 = cpos(g);
-				arm_cmp_rr(g, 0, 2);
-				uint32_t blt = emit_bne_placeholder(g);
-				patch_b(&g->code, blt, cpos(g));
-				arm_sub_rr(g, 0, 0, 2);
-				patch_b(&g->code, blt, lp2);
-			}
+			arm_mov_rr(g, 0, 1);
+			arm_mov_rr(g, 1, 2);
+			emit_udiv(g);
+			arm_mov_rr(g, 0, 2);
 			break;
 		case TK_LT:
 			arm_cmp_rr(g, 1, 0);
@@ -964,108 +1004,63 @@ static void gen_expr(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 		case TK_OR:  arm_orr_rr(g, 0, 1, 0); break;
 		default: die("unknown binop");
 		}
-		break;
+		return val_reg();
 	}
 	case ND_CALL: {
-		for (int i=n->nch-1; i>=0; i--) {
-			gen_expr(g, n->ch[i], env, in_fn);
+		if (!strcmp(n->s, "putint")) {
+			if (n->nch != 1) die("putint takes 1 argument");
+			Val v = gen_expr(g, n->ch[0], env);
+			val_rval(g, v);
 			arm_push1(g, 0);
+			arm_bl_placeholder(g, "__out");
+			A(g, 0xE28DD004);
+			return val_reg();
 		}
-		arm_bl_placeholder(g, n->s, g);
-		if (n->nch > 0) {
-			uint32_t adj = n->nch * 4;
-			if (can_imm8r(adj))
-				A(g, 0xE28DD000 | arm_imm8r(adj));
-			else {
-				arm_mov_r(g, 1, adj);
-				arm_add_rr(g, 13, 13, 1);
-			}
+		if (!strcmp(n->s, "getc")) {
+			if (n->nch != 0) die("getc takes no arguments");
+			arm_mov_r(g, 4, BSS_BASE + BSS_SZ - 4);
+			arm_syscall_read1(g, 4);
+			arm_mov_r(g, 1, BSS_BASE + BSS_SZ - 4);
+			A(g, 0xE5910000);
+			A(g, 0xE20000FF);
+			return val_reg();
 		}
-		break;
-	}
-	case ND_OUT: {
-		gen_expr(g, n->a, env, in_fn);
-		arm_push1(g, 4);
-		arm_push1(g, 5);
-		arm_push1(g, 0);
-		arm_bl_placeholder(g, "__out", g);
-		A(g, 0xE28DD004);
-		arm_pop1(g, 5);
-		arm_pop1(g, 4);
-		break;
-	}
-	case ND_IN: {
-		arm_mov_r(g, 4, BSS_BASE + BSS_SZ - 4);
-		arm_syscall_read1(g, 4);
-		arm_mov_r(g, 1, BSS_BASE + BSS_SZ - 4);
-		A(g, 0xE5910000);
-		A(g, 0xE20000FF);
-		break;
-	}
-	case ND_FN: {
-		uint32_t skip = emit_b_placeholder(g);
-		uint32_t fn_addr = TEXT_BASE + cpos(g);
-		arm_push(g, (1<<4)|(1<<11)|(1<<14));
-		arm_mov_rr(g, 11, 13);
-		Lenv fenv;
-		memset(&fenv, 0, sizeof(fenv));
-		for (int i=0; i<n->npar; i++) {
-			int off = 12 + i*4;
-			lenv_add(&fenv, n->params[i], off);
-		}
-		gen_stmt(g, n->a, &fenv, 1);
-		arm_pop(g, (1<<4)|(1<<11)|(1<<15));
-		patch_b(&g->code, skip, TEXT_BASE + cpos(g));
-		arm_mov_r(g, 0, fn_addr);
-		break;
+		emit_call(g, n->ch, n->nch, env, n->s);
+		return val_reg();
 	}
 	default:
 		dief("gen_expr: unhandled node %d", n->t);
 	}
+	return val_reg();
 }
 
 static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 	switch (n->t) {
-	case ND_BLOCK:
-		for (int i=0; i<n->nch; i++) gen_stmt(g, n->ch[i], env, in_fn);
-		break;
-	case ND_VAR: {
-		gen_expr(g, n->a, env, in_fn);
-		if (in_fn) {
-			env->frame_sz += 4;
-			int off = -(env->frame_sz);
-			A(g, 0xE24DD004);
-			A(g, 0xE50B0000 | (0<<12) | env->frame_sz);
-			lenv_add(env, n->s, off);
-		} else {
-			int gi = g_add(g, n->s, 0);
-			arm_mov_r(g, 1, BSS_BASE + g->glbs[gi].goff);
-			A(g, 0xE5810000);
-		}
+	case ND_BLOCK: {
+		int i;
+		for (i=0; i<n->nch; i++) gen_stmt(g, n->ch[i], env, in_fn);
 		break;
 	}
-	case ND_CONST: {
-		if (n->a->t == ND_NUM) {
-			if (g_find(g, n->s) >= 0) dief("redefinition of '%s'", n->s);
+	case ND_DECL: {
+		if (!in_fn && n->a->t == ND_NUM) {
 			int gi = g_add(g, n->s, 1);
 			g->glbs[gi].cval = n->a->num;
 			g->glbs[gi].is_str = 0;
-		} else if (n->a->t == ND_STR) {
-			if (g_find(g, n->s) >= 0) dief("redefinition of '%s'", n->s);
+		} else if (!in_fn && n->a->t == ND_STR) {
 			int gi = g_add(g, n->s, 1);
 			g->glbs[gi].is_str = 1;
-			g->glbs[gi].soff = rod_add(g, n->a->s, n->a->slen);
+			g->glbs[gi].soff = n->a->soff;
 		} else {
+			Val v = gen_expr(g, n->a, env);
+			val_rval(g, v);
 			if (in_fn) {
-				gen_expr(g, n->a, env, in_fn);
 				env->frame_sz += 4;
 				int off = -(env->frame_sz);
 				A(g, 0xE24DD004);
-				A(g, 0xE50B0000 | (0<<12) | env->frame_sz);
+				val_store(g, val_fp(off));
 				lenv_add(env, n->s, off);
 			} else {
 				int gi = g_add(g, n->s, 0);
-				gen_expr(g, n->a, env, in_fn);
 				arm_mov_r(g, 1, BSS_BASE + g->glbs[gi].goff);
 				A(g, 0xE5810000);
 			}
@@ -1073,21 +1068,17 @@ static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 		break;
 	}
 	case ND_RETURN:
-		if (n->a) gen_expr(g, n->a, env, in_fn);
-		else arm_mov_r(g, 0, 0);
-		if (env->frame_sz > 0) {
-			uint32_t adj = env->frame_sz;
-			if (can_imm8r(adj))
-				A(g, 0xE28DD000 | arm_imm8r(adj));
-			else {
-				arm_mov_r(g, 1, adj);
-				arm_add_rr(g, 13, 13, 1);
-			}
+		if (n->a) {
+			Val v = gen_expr(g, n->a, env);
+			val_rval(g, v);
+		} else {
+			arm_mov_r(g, 0, 0);
 		}
-		arm_pop(g, (1<<4)|(1<<11)|(1<<15));
+		emit_fn_exit(g, env);
 		break;
 	case ND_IF: {
-		gen_expr(g, n->a, env, in_fn);
+		Val v = gen_expr(g, n->a, env);
+		val_rval(g, v);
 		arm_cmp_rr(g, 0, 0);
 		uint32_t bfalse = emit_beq_placeholder(g);
 		gen_stmt(g, n->b, env, in_fn);
@@ -1103,7 +1094,8 @@ static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 	}
 	case ND_WHILE: {
 		uint32_t top = TEXT_BASE + cpos(g);
-		gen_expr(g, n->a, env, in_fn);
+		Val v = gen_expr(g, n->a, env);
+		val_rval(g, v);
 		arm_cmp_rr(g, 0, 0);
 		uint32_t bfalse = emit_beq_placeholder(g);
 		gen_stmt(g, n->b, env, in_fn);
@@ -1113,38 +1105,23 @@ static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 		break;
 	}
 	case ND_FN: {
-		if (!n->s) { gen_expr(g, n, env, in_fn); break; }
 		if (g->nfn >= MAX_FNS) die("too many functions");
 		uint32_t skip = emit_b_placeholder(g);
 		uint32_t fn_addr = TEXT_BASE + cpos(g);
 		g->fns[g->nfn].name = n->s;
 		g->fns[g->nfn].addr = fn_addr;
 		g->nfn++;
-		arm_push(g, (1<<4)|(1<<11)|(1<<14));
-		arm_mov_rr(g, 11, 13);
 		Lenv fenv;
 		memset(&fenv, 0, sizeof(fenv));
-		for (int i=0; i<n->npar; i++) {
-			int off = 12 + i*4;
-			lenv_add(&fenv, n->params[i], off);
-		}
+		emit_fn_entry(g, &fenv, n->params, n->npar);
 		gen_stmt(g, n->a, &fenv, 1);
 		arm_mov_r(g, 0, 0);
-		if (fenv.frame_sz > 0) {
-			uint32_t adj = fenv.frame_sz;
-			if (can_imm8r(adj))
-				A(g, 0xE28DD000 | arm_imm8r(adj));
-			else {
-				arm_mov_r(g, 1, adj);
-				arm_add_rr(g, 13, 13, 1);
-			}
-		}
-		arm_pop(g, (1<<4)|(1<<11)|(1<<15));
+		emit_fn_exit(g, &fenv);
 		patch_b(&g->code, skip, TEXT_BASE + cpos(g));
 		break;
 	}
 	default:
-		gen_expr(g, n, env, in_fn);
+		gen_expr(g, n, env);
 		break;
 	}
 }
@@ -1159,7 +1136,6 @@ static void emit_itoa_fn(Cg2 *g) {
 	arm_mov_r(g, 5, BSS_BASE + BSS_SZ - 20);
 	arm_mov_rr(g, 6, 5);
 	arm_mov_r(g, 7, 10);
-	/*handle zero specially*/
 	arm_cmp_rr(g, 4, 4);
 	A(g, 0xE3540000);
 	uint32_t bnz = emit_bne_placeholder(g);
@@ -1209,7 +1185,7 @@ static void emit_out_fn(Cg2 *g) {
 	arm_cmp_rr(g, 4, 5);
 	uint32_t bstr = emit_bhs_placeholder(g);
 	arm_mov_rr(g, 0, 4);
-	arm_bl_placeholder(g, "__itoa", g);
+	arm_bl_placeholder(g, "__itoa");
 	arm_mov_rr(g, 6, 0);
 	arm_mov_rr(g, 2, 1);
 	arm_mov_r(g, 7, 4);
@@ -1236,9 +1212,9 @@ static void emit_out_fn(Cg2 *g) {
 	arm_pop(g, (1<<4)|(1<<5)|(1<<6)|(1<<15));
 }
 
-static void emit_out_str_fn(Cg2 *g) {
+static void emit_putstr_fn(Cg2 *g) {
 	if (g->nfn >= MAX_FNS) die("too many functions");
-	g->fns[g->nfn].name = "__out_str";
+	g->fns[g->nfn].name = "__putstr";
 	g->fns[g->nfn].addr = TEXT_BASE + cpos(g);
 	g->nfn++;
 	arm_push(g, (1<<4)|(1<<14));
@@ -1275,6 +1251,7 @@ static Cg2 *cg2_new(void) {
 }
 
 static void resolve_strings(Cg2 *g, Nd *prog) {
+	int i;
 	if (!prog) return;
 	if (prog->t == ND_STR) {
 		prog->soff = rod_add(g, prog->s, prog->slen);
@@ -1283,25 +1260,25 @@ static void resolve_strings(Cg2 *g, Nd *prog) {
 	if (prog->a) resolve_strings(g, prog->a);
 	if (prog->b) resolve_strings(g, prog->b);
 	if (prog->c) resolve_strings(g, prog->c);
-	for (int i=0; i<prog->nch; i++) resolve_strings(g, prog->ch[i]);
+	for (i=0; i<prog->nch; i++) resolve_strings(g, prog->ch[i]);
 }
 
 void codegen(Nd *prog, Cg *cg_out) {
+	int i, j;
 	Cg2 *g = cg2_new();
 	resolve_strings(g, prog);
 	emit_itoa_fn(g);
 	emit_out_fn(g);
-	emit_out_str_fn(g);
+	emit_putstr_fn(g);
 	uint32_t body_entry = TEXT_BASE + cpos(g);
 	Lenv env;
 	memset(&env, 0, sizeof(env));
-	arm_push(g, (1<<4)|(1<<14));
-	for (int i=0; i<prog->nch; i++) gen_stmt(g, prog->ch[i], &env, 0);
+	for (i=0; i<prog->nch; i++) gen_stmt(g, prog->ch[i], &env, 0);
 	arm_syscall_exit(g, 0);
-	for (int i=0; i<g->nfpatch; i++) {
+	for (i=0; i<g->nfpatch; i++) {
 		Fpatch *fp = &g->fpatches[i];
 		int found = 0;
-		for (int j=0; j<g->nfn; j++) {
+		for (j=0; j<g->nfn; j++) {
 			if (!strcmp(g->fns[j].name, fp->name)) {
 				patch_b(&g->code, fp->pos, g->fns[j].addr);
 				found = 1;
@@ -1325,17 +1302,26 @@ void emit_elf(Cg *g, const char *path) {
 	uint32_t rod_sz = (uint32_t)g->rod.len;
 	uint32_t entry = g->entry;
 	Buf file;
-	buf_init(&file);
-	for (uint32_t i = 0; i < hdrsz; i++) buf_u8(&file, 0);
-	buf_append(&file, g->code.d, g->code.len);
 	uint32_t rod_off = 0;
+	uint32_t text_filesz;
+	uint8_t *E;
+	uint8_t *P1;
+	uint8_t *P3;
+	int pi = 1;
+	FILE *f;
+	buf_init(&file);
+	{
+		uint32_t i;
+		for (i = 0; i < hdrsz; i++) buf_u8(&file, 0);
+	}
+	buf_append(&file, g->code.d, g->code.len);
 	if (rod_sz > 0) {
 		while (file.len % page) buf_u8(&file, 0);
 		rod_off = (uint32_t)file.len;
 		buf_append(&file, g->rod.d, g->rod.len);
 	}
-	uint32_t text_filesz = rod_off ? rod_off - hdrsz : (uint32_t)file.len - hdrsz;
-	uint8_t *E = file.d;
+	text_filesz = rod_off ? rod_off - hdrsz : (uint32_t)file.len - hdrsz;
+	E = file.d;
 	E[0]=0x7f; E[1]='E'; E[2]='L'; E[3]='F';
 	E[4]=1; E[5]=1; E[6]=1; E[7]=0;
 	le16(E+0x10, 2);
@@ -1351,7 +1337,7 @@ void emit_elf(Cg *g, const char *path) {
 	le16(E+0x2E, 0);
 	le16(E+0x30, 0);
 	le16(E+0x32, 0);
-	uint8_t *P1 = E + ehsz;
+	P1 = E + ehsz;
 	le32(P1+0x00, 1);
 	le32(P1+0x04, hdrsz);
 	le32(P1+0x08, TEXT_BASE);
@@ -1360,7 +1346,6 @@ void emit_elf(Cg *g, const char *path) {
 	le32(P1+0x14, text_filesz);
 	le32(P1+0x18, 5);
 	le32(P1+0x1C, page);
-	int pi = 1;
 	if (rod_sz > 0) {
 		uint8_t *P2 = E + ehsz + phsz * pi++;
 		le32(P2+0x00, 1);
@@ -1372,7 +1357,7 @@ void emit_elf(Cg *g, const char *path) {
 		le32(P2+0x18, 4);
 		le32(P2+0x1C, page);
 	}
-	uint8_t *P3 = E + ehsz + phsz * pi;
+	P3 = E + ehsz + phsz * pi;
 	le32(P3+0x00, 1);
 	le32(P3+0x04, 0);
 	le32(P3+0x08, BSS_BASE);
@@ -1381,7 +1366,7 @@ void emit_elf(Cg *g, const char *path) {
 	le32(P3+0x14, BSS_SZ);
 	le32(P3+0x18, 6);
 	le32(P3+0x1C, page);
-	FILE *f = fopen(path, "wb");
+	f = fopen(path, "wb");
 	if (!f) { perror(path); exit(1); }
 	if (fwrite(file.d, 1, file.len, f) != file.len) { perror("fwrite"); exit(1); }
 	fclose(f);
@@ -1392,11 +1377,13 @@ void emit_elf(Cg *g, const char *path) {
 
 char *rc(const char *path) {
 	FILE *f = fopen(path, "rb");
+	long n;
+	char *buf;
 	if (!f) { perror(path); exit(1); }
 	fseek(f, 0, SEEK_END);
-	long n = ftell(f);
+	n = ftell(f);
 	fseek(f, 0, SEEK_SET);
-	char *buf = malloc(n+1);
+	buf = malloc(n+1);
 	if (!buf) die("malloc");
 	if (fread(buf, 1, n, f) != (size_t)n) { perror("fread"); exit(1); }
 	fclose(f);
@@ -1405,20 +1392,25 @@ char *rc(const char *path) {
 }
 
 int main(int argc, char **argv) {
+	const char *in;
+	const char *out = "a.out";
+	char *src;
+	Lx *lx;
+	Nd *prog;
+	Cg cg;
+	int i;
 	if (argc < 2) {
 		fprintf(stderr, "usage: %s src.lt -o elf.out\n", argv[0]);
 		return 1;
 	}
-	const char *in = argv[1];
-	const char *out = "a.out";
-	for (int i=2; i<argc; i++) {
+	in = argv[1];
+	for (i=2; i<argc; i++) {
 		if (!strcmp(argv[i], "-o") && i+1 < argc) out = argv[++i];
 		else { fprintf(stderr, "unknown arg: %s\n", argv[i]); return 1; }
 	}
-	char *src = rc(in);
-	Lx *lx = lx_new(src);
-	Nd *prog = parse(lx);
-	Cg cg;
+	src = rc(in);
+	lx = lx_new(src);
+	prog = parse(lx);
 	cg_init(&cg);
 	codegen(prog, &cg);
 	emit_elf(&cg, out);

@@ -13,18 +13,11 @@ typedef enum {
 	TK_NUM,
 	TK_STR,
 	TK_ID,
-	TK_VAR,
-	TK_CONST,
-	TK_FN,
+	TK_INT,
 	TK_IF,
-	TK_ELIF,
 	TK_ELSE,
 	TK_WHILE,
 	TK_RETURN,
-	TK_TRUE,
-	TK_FALSE,
-	TK_OUT,
-	TK_IN,
 	TK_PLUS,
 	TK_MINUS,
 	TK_STAR,
@@ -66,11 +59,9 @@ typedef struct Nd Nd;
 
 typedef enum {
 	ND_NUM,
-	ND_BOOL,
 	ND_STR,
 	ND_ID,
-	ND_VAR,
-	ND_CONST,
+	ND_DECL,
 	ND_ASSIGN,
 	ND_BIN,
 	ND_UN,
@@ -80,15 +71,12 @@ typedef enum {
 	ND_FN,
 	ND_CALL,
 	ND_RETURN,
-	ND_OUT,
-	ND_IN,
 	ND_PROG
 } Nt;
 
 typedef struct Nd {
 	Nt t;
 	long num;
-	int bval;
 	char *s;
 	int slen;
 	int soff;
@@ -103,7 +91,6 @@ typedef struct Nd {
 typedef struct {
 	char *name;
 	int off;
-	int is_const;
 } Loc;
 
 typedef struct {
@@ -115,13 +102,11 @@ typedef struct {
 	int soff;
 } Glb;
 
-typedef struct Fr Fr;
-
-struct Fr {
+typedef struct {
 	Loc *locs;
 	int nloc;
 	int sz;
-};
+} Fr;
 
 typedef struct {
 	char *src;
@@ -160,34 +145,23 @@ typedef struct {
 	int np;
 } Fpl;
 
+typedef enum { V_IMM, V_REG, V_FP, V_ABS } Vk;
+typedef struct { Vk k; int32_t i; } Val;
+
 void buf_init(Buf *b);
-
 void buf_reserve(Buf *b, size_t n);
-
 void buf_append(Buf *b, const void *s, size_t n);
-
 void buf_u8(Buf *b, uint8_t x);
-
 void buf_u32(Buf *b, uint32_t x);
-
 void buf_patch32(Buf *b, size_t off, uint32_t x);
-
 Lx *lx_new(char *src);
-
 void lx_advance(Lx *l);
-
 Tok lx_next(Lx *l);
-
 Nd *parse(Lx *l);
-
 Nd *nd_new(Nt t);
-
 void cg_init(Cg *g);
-
 void codegen(Nd *prog, Cg *g);
-
 void emit_elf(Cg *g, const char *path);
-
 char *rc(const char *path);
 
 #endif
