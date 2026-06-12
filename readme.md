@@ -58,7 +58,7 @@ What is absent: pointers, arrays, structs, multiple types, `for`, `break`, `cont
 
 ## The compiler
 
-[lethargon.c](./lethargon.c) and [lethargon.h](./lethargon.h). Compiled with any C89 compatible compiler. No build system required beyond `make`.
+[lethargon.c](./lethargon.c) and [lethargon.h](./lethargon.h). Compiled with any C89 compatible compiler and `make` build system.
 
 ```
 make
