@@ -74,7 +74,7 @@ The runtime provides three internal functions: `__itoa`, `__out`, `__putstr`. Th
 
 ## Why
 
-ARM 32 bit is the architecture of the device this is written on. The constraint is real, not chosen for aesthetics. A language that runs on the machine in your pocket, compiled by a compiler that fits in two files, with no toolchain beyond a C compiler, is useful in a way that most modern software is not.
+ARM 32 bit is the architecture of the device this is written on. The constraint is real, not chosen for aesthetics. A language that runs on the machine in your pocket, compiled by a compiler that fits in two files, with no toolchain beyond a C compiler, is useful in a way that most [modern software](https://harmful.cat-v.org/software/) is not.
 
 The self hosting target is not distant. The language needs pointers, arrays, and a minimal allocator. When those exist, the compiler can be written in Lethargon and the bootstrap chain becomes fully auditable from source to binary on a single device.
 
