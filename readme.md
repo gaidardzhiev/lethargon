@@ -58,7 +58,7 @@ What is absent: pointers, arrays, structs, multiple types, `for`, `break`, `cont
 
 ## The compiler
 
-`lethargon.c` and `lethargon.h`. Compiled with any C89 compatible compiler. No build system required beyond `make`.
+[lethargon.c](./lethargon.c) and [lethargon.h](./lethargon.h). Compiled with any C89 compatible compiler. No build system required beyond `make`.
 
 ```
 make
@@ -81,8 +81,8 @@ The self hosting target is not distant. The language needs pointers, arrays, and
 ## Status
 
 - [hello.lt](src/hello.lt): working
-- `vars.lt`: working
-- `fact.lt`: working (recursive factorial, the correctness baseline)
+- [vars.lt](src/vars.lt): working
+- [fact.lt](src/fact.lt): working (recursive factorial, the correctness baseline)
 - self hosting: in progress...
 
 ## License
