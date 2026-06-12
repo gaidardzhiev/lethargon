@@ -1,6 +1,6 @@
 # Lethargon
 
-A compiled systems language for ARM 32 bit Linux. No libc. No linker. No runtime.
+A compiled systems language for ARM 32 bit Linux. No libc, linker or runtime.
 
 The compiler reads `.lt` source and writes a self contained ELF executable directly. It runs on armv8l 32bit Arch Linux. It targets ARMv7 EABI5 and produces correct position dependent executables with no external dependencies at any stage.
 
