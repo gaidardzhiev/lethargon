@@ -2,9 +2,9 @@
 
 A compiled systems language for ARM 32 bit Linux. No libc. No linker. No runtime.
 
-The compiler reads `.lt` source and writes a self contained ELF executable directly. It runs today on armv8l 32bit Arch Linux. It targets ARMv7 EABI5 and produces correct position dependent executables with no external dependencies at any stage.
+The compiler reads `.lt` source and writes a self contained ELF executable directly. It runs on armv8l 32bit Arch Linux. It targets ARMv7 EABI5 and produces correct position dependent executables with no external dependencies at any stage.
 
-The end goal is for Lethargon to compile a complete, reproducible version of its own compiler. Not as a demonstration of cleverness. As a proof that the language and its code generator are correct enough, expressive enough, and complete enough to be trusted as a system tool. Self compilation is the only test that cannot be faked.
+The end goal is for Lethargon to compile a complete, reproducible version of its own compiler. Not only as a demonstration of cleverness but as a proof that the language and its code generator are correct enough, expressive enough, and complete enough to be trusted as a system tool. Self compilation is the only test that cannot be faked.
 
 ## The language
 
@@ -54,7 +54,7 @@ Conditions are integers. Zero is false. Anything else is true. Exactly as in C.
 
 `else if` chains parse naturally. No special token needed.
 
-What is deliberately absent: pointers, arrays, structs, multiple types, `for`, `break`, `continue`, `switch`, type checking, optimization. The language is minimal by design, not by accident. Each addition will be made when it is needed and not before.
+What is absent: pointers, arrays, structs, multiple types, `for`, `break`, `continue`, `switch`, type checking, optimization. The language is minimal by design, not by accident. Each addition will be made when it is needed and not before.
 
 ## The compiler
 
@@ -66,7 +66,7 @@ make
 ./hello.out
 ```
 
-The compiler is a recursive descent parser feeding directly into an ARM32 code emitter. There is no intermediate representation. No AST transformation passes. No optimization. The parser produces an AST, the code generator walks it once and emits ARM instructions into a buffer, the buffer is written as an ELF file. Three segments: text at `0x10094`, read only data at `0x500000`, BSS at `0x600000`. The entry point is recorded after the runtime helpers are emitted.
+The compiler is a recursive descent parser feeding directly into an ARM32 code emitter. There is no intermediate representation. No AST transformation passes. No silly optimizations. The parser produces an AST, the code generator walks it once and emits ARM instructions into a buffer, the buffer is written as an ELF file. Three segments: text at `0x10094`, read only data at `0x500000`, BSS at `0x600000`. The entry point is recorded after the runtime helpers are emitted.
 
 Forward calls including recursion are patched in a single pass at the end of codegen. All calling convention logic lives in three functions: `emit_fn_entry`, `emit_fn_exit`, `emit_call`. They do not duplicate each other.
 
@@ -80,11 +80,11 @@ The self hosting target is not distant. The language needs pointers, arrays, and
 
 ## Status
 
-- `hello.lt`: working
+- [hello.lt](src/hello.lt): working
 - `vars.lt`: working
 - `fact.lt`: working (recursive factorial, the correctness baseline)
-- self hosting: in progress
+- self hosting: in progress...
 
 ## License
 
-GPL-3.0-only. See `COPYING`.
+This project is provided under the [GPL3 License](./COPYING) Copyright (C) 2026 Ivan Gaydardzhiev
