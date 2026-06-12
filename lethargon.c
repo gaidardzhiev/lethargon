@@ -657,6 +657,10 @@ static void arm_cmp_rr(Cg2 *g, int rn, int rm) {
 	A(g, 0xE1500000 | (rn<<16) | rm);
 }
 
+static void arm_cmp_imm(Cg2 *g, int rn, uint32_t imm) {
+	A(g, 0xE3500000 | (rn<<16) | arm_imm8r(imm));
+}
+
 static void arm_and_rr(Cg2 *g, int rd, int rn, int rm) {
 	A(g, 0xE0000000 | (rd<<12) | (rn<<16) | rm);
 }
@@ -940,7 +944,7 @@ static Val gen_expr(Cg2 *g, Nd *n, Lenv *env) {
 		if (n->op == TK_MINUS) {
 			A(g, 0xE2600000);
 		} else if (n->op == TK_BANG) {
-			arm_cmp_rr(g, 0, 0);
+			arm_cmp_imm(g, 0, 0);
 			arm_mov_r(g, 0, 0);
 			A(g, 0x03A00001);
 		}
@@ -956,7 +960,7 @@ static Val gen_expr(Cg2 *g, Nd *n, Lenv *env) {
 		switch (n->op) {
 		case TK_PLUS:  arm_add_rr(g, 0, 1, 0); break;
 		case TK_MINUS: arm_sub_rr(g, 0, 1, 0); break;
-		case TK_STAR:  arm_mul_rr(g, 0, 1, 0); break;
+		case TK_STAR:  arm_mul_rr(g, 0, 0, 1); break;
 		case TK_SLASH:
 			arm_mov_rr(g, 2, 0);
 			arm_mov_rr(g, 0, 1);
@@ -1079,7 +1083,7 @@ static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 	case ND_IF: {
 		Val v = gen_expr(g, n->a, env);
 		val_rval(g, v);
-		arm_cmp_rr(g, 0, 0);
+		arm_cmp_imm(g, 0, 0);
 		uint32_t bfalse = emit_beq_placeholder(g);
 		gen_stmt(g, n->b, env, in_fn);
 		if (n->c) {
@@ -1096,7 +1100,7 @@ static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 		uint32_t top = TEXT_BASE + cpos(g);
 		Val v = gen_expr(g, n->a, env);
 		val_rval(g, v);
-		arm_cmp_rr(g, 0, 0);
+		arm_cmp_imm(g, 0, 0);
 		uint32_t bfalse = emit_beq_placeholder(g);
 		gen_stmt(g, n->b, env, in_fn);
 		uint32_t bb = emit_b_placeholder(g);
