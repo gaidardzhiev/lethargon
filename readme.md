@@ -10,6 +10,7 @@ The end goal is for Lethargon to compile a complete, reproducible version of its
 
 One type: `int`. A variable holding a string literal holds its address. Pointer variables hold addresses of other variables. The compiler knows the difference.
 
+[fact.lt](src/fact.lt):
 ```c
 int fact(int n) {
 	if (n == 0) { return 1; }
@@ -20,6 +21,7 @@ putint(fact(10));
 putint("\n");
 ```
 
+[ptr.lt](src/ptr.lt):
 ```c
 int x = 99;
 int *p = &x;
@@ -29,22 +31,25 @@ putint("\n");
 putint(x);
 putint("\n");
 ```
-
+compile the compiler:
 ```sh
 make
 /usr/sbin/musl-gcc -o lethargon lethargon.c -static -no-pie -g -Wall -Wextra
 ```
 
+compile [fact](src/fact.lt):
 ```sh
 ./lethargon src/fact.lt -o fact.out
 wrote ARM32 ELF to fact.out (4098 bytes, entry 0x101b8)
 ```
 
+execute `fact.out`:
 ```sh
 ./fact.out
 3628800
 ```
 
+analyze with strace:
 ```sh
 strace ./fact.out
 execve("./fact.out", ["./fact.out"], 0xffb9bd20 /* 24 vars */) = 0
