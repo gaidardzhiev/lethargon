@@ -77,7 +77,7 @@ What is absent: structs, multiple types, `for`, `break`, `continue`, `switch`, a
 
 ## The compiler
 
-[lethargon.c](./lethargon.c) and [lethargon.h](./lethargon.h). Compiled with any C89 compatible compiler and `make` build system.
+[lethargon.c](./lethargon.c) and [lethargon.h](./lethargon.h) compiled with any C89 compatible compiler and `make` build system.
 
 ```
 make
