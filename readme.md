@@ -31,25 +31,25 @@ putint("\n");
 putint(x);
 putint("\n");
 ```
-compile the compiler:
+Compile the compiler:
 ```sh
 make
 /usr/sbin/musl-gcc -o lethargon lethargon.c -static -no-pie -g -Wall -Wextra
 ```
 
-compile [fact](src/fact.lt):
+Compile [fact](src/fact.lt) to `fact.out` ELF executable:
 ```sh
 ./lethargon src/fact.lt -o fact.out
 wrote ARM32 ELF to fact.out (4098 bytes, entry 0x101b8)
 ```
 
-execute `fact.out`:
+Execute `fact.out`:
 ```sh
 ./fact.out
 3628800
 ```
 
-analyze with strace:
+Analyze with strace:
 ```sh
 strace ./fact.out
 execve("./fact.out", ["./fact.out"], 0xffb9bd20 /* 24 vars */) = 0
