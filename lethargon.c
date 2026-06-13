@@ -581,7 +581,10 @@ Nd *parse(Lx *l) {
 #define ROD_BASE     0x500000u
 #define BSS_BASE     0x600000u
 #define BSS_SCRATCH  32u
-#define BSS_SZ       (MAX_GLBS * 4u + BSS_SCRATCH)
+#define HEAP_SZ      65536u
+#define BSS_SZ       (MAX_GLBS * 4u + BSS_SCRATCH + 4u + HEAP_SZ)
+#define HEAP_BASE    (BSS_BASE + MAX_GLBS * 4u + BSS_SCRATCH)
+#define BUMP_PTR     (HEAP_BASE)
 #define MAX_LOCALS   256
 #define MAX_GLBS     1024
 #define MAX_FNS      256
@@ -1101,6 +1104,21 @@ static Val gen_expr(Cg2 *g, Nd *n, Lenv *env) {
 			A(g, 0xE7C02001);
 			return val_reg();
 		}
+		if (!strcmp(n->s, "balloc")) {
+			if (n->nch != 1) die("balloc takes 1 argument");
+			Val vn = gen_expr(g, n->ch[0], env);
+			val_rval(g, vn);
+			arm_mov_rr(g, 4, 0);
+			arm_mov_r(g, 1, BUMP_PTR);
+			A(g, 0xE5910000);
+			arm_push1(g, 0);
+			A(g, 0xE2844003);
+			A(g, 0xE3C44003);
+			arm_add_rr(g, 0, 0, 4);
+			A(g, 0xE5810000);
+			arm_pop1(g, 0);
+			return val_reg();
+		}
 		emit_call(g, n->ch, n->nch, env, n->s);
 		return val_reg();
 	}
@@ -1411,6 +1429,9 @@ void codegen(Nd *prog, Cg *cg_out) {
 	emit_out_fn(g);
 	emit_putstr_fn(g);
 	uint32_t body_entry = TEXT_BASE + cpos(g);
+	arm_mov_r(g, 0, HEAP_BASE + 4);
+	arm_mov_r(g, 1, BUMP_PTR);
+	A(g, 0xE5810000);
 	Lenv env;
 	memset(&env, 0, sizeof(env));
 	for (i=0; i<prog->nch; i++) gen_stmt(g, prog->ch[i], &env, 0);
