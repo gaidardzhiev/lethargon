@@ -4,4 +4,4 @@ int fact(int n) {
 }
 
 putint(fact(10));
-putint("\n");
+putstr("\n");

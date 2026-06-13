@@ -10,10 +10,10 @@ p[2] = 30;
 p[3] = 40;
 
 putint(p[0]);
-putint("\n");
+putstr("\n");
 putint(p[1]);
-putint("\n");
+putstr("\n");
 putint(p[2]);
-putint("\n");
+putstr("\n");
 putint(p[3]);
-putint("\n");
+putstr("\n");

@@ -2,6 +2,6 @@ int msg = "Hello from Lethargon!\n";
 int x = 132;
 int y = x * 4;
 int z = y - 5;
-putint(msg);
+putstr(msg);
 putint(y);
-putint("\n");
+putstr("\n");

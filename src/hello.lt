@@ -1,5 +1,5 @@
 int greet(int msg) {
-	putint(msg);
+	putstr(msg);
 	return 0;
 }
 

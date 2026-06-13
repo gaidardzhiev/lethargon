@@ -746,11 +746,6 @@ static uint32_t emit_bne_placeholder(Cg2 *g) {
 	return pos;
 }
 
-static uint32_t emit_bhs_placeholder(Cg2 *g) {
-	uint32_t pos = cpos(g);
-	A(g, 0x2A000000);
-	return pos;
-}
 
 static void patch_b(Buf *b, uint32_t pos, uint32_t target) {
 	int32_t off = ((int32_t)(target - TEXT_BASE - (pos + 8))) >> 2;
@@ -1068,6 +1063,15 @@ static Val gen_expr(Cg2 *g, Nd *n, Lenv *env) {
 			A(g, 0xE28DD004);
 			return val_reg();
 		}
+		if (!strcmp(n->s, "putstr")) {
+			if (n->nch != 1) die("putstr takes 1 argument");
+			Val v = gen_expr(g, n->ch[0], env);
+			val_rval(g, v);
+			arm_push1(g, 0);
+			arm_bl_placeholder(g, "__putstr");
+			A(g, 0xE28DD004);
+			return val_reg();
+		}
 		if (!strcmp(n->s, "getc")) {
 			if (n->nch != 0) die("getc takes no arguments");
 			arm_mov_r(g, 4, BSS_BASE + BSS_SZ - 4);
@@ -1339,10 +1343,6 @@ static void emit_out_fn(Cg2 *g) {
 	g->nfn++;
 	arm_push(g, (1<<4)|(1<<5)|(1<<6)|(1<<14));
 	arm_mov_rr(g, 4, 0);
-	arm_mov_r(g, 5, ROD_BASE);
-	arm_cmp_rr(g, 4, 5);
-	uint32_t bstr = emit_bhs_placeholder(g);
-	arm_mov_rr(g, 0, 4);
 	arm_bl_placeholder(g, "__itoa");
 	arm_mov_rr(g, 6, 0);
 	arm_mov_rr(g, 2, 1);
@@ -1350,23 +1350,6 @@ static void emit_out_fn(Cg2 *g) {
 	arm_mov_r(g, 0, 1);
 	arm_mov_rr(g, 1, 6);
 	arm_swi(g);
-	uint32_t done = emit_b_placeholder(g);
-	patch_b(&g->code, bstr, TEXT_BASE + cpos(g));
-	arm_mov_rr(g, 1, 4);
-	arm_mov_r(g, 2, 0); {
-		uint32_t lp = TEXT_BASE + cpos(g);
-		A(g, 0xE7D13002);
-		A(g, 0xE3530000);
-		uint32_t bz = emit_beq_placeholder(g);
-		A(g, 0xE2822001);
-		uint32_t bk = emit_b_placeholder(g);
-		patch_b(&g->code, bk, lp);
-		patch_b(&g->code, bz, TEXT_BASE + cpos(g));
-	}
-	arm_mov_r(g, 7, 4);
-	arm_mov_r(g, 0, 1);
-	arm_swi(g);
-	patch_b(&g->code, done, TEXT_BASE + cpos(g));
 	arm_pop(g, (1<<4)|(1<<5)|(1<<6)|(1<<15));
 }
 

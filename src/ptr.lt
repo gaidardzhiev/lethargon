@@ -1,7 +1,7 @@
 int x = 99;
 int *p = &x;
 putint(*p);
-putint("\n");
+putstr("\n");
 *p = 42;
 putint(x);
-putint("\n");
+putstr("\n");
