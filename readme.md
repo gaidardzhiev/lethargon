@@ -37,7 +37,7 @@ make
 /usr/sbin/musl-gcc -o lethargon lethargon.c -static -no-pie -g -Wall -Wextra
 ```
 
-Compile [fact.lt](src/fact.lt) to `fact.out` ELF executable:
+Compile [fact.lt](src/fact.lt) source code to `fact.out` ELF executable:
 ```sh
 ./lethargon src/fact.lt -o fact.out
 wrote ARM32 ELF to fact.out (4098 bytes, entry 0x101b8)
@@ -49,7 +49,7 @@ Execute `fact.out`:
 3628800
 ```
 
-Analyze with strace:
+Analyze with strace or use the [elfdump.sh](src/elfdump.sh) POSIX shell script:
 ```sh
 strace ./fact.out
 execve("./fact.out", ["./fact.out"], 0xffb9bd20 /* 24 vars */) = 0
