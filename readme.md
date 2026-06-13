@@ -60,7 +60,6 @@ exit(0)                                 = ?
 +++ exited with 0 +++
 ```
 
-
 Keywords: `int`, `if`, `else`, `while`, `return`. Everything else is a function call or an operator. `putint` and `getc` are the two built-in I/O intrinsics. There is no standard library. There is no preprocessor. There is no separate compilation.
 
 Operators: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`, unary `-`, `&` (address-of), `*` (dereference), `[]` (index).
