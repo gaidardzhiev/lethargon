@@ -33,10 +33,13 @@ typedef enum {
 	TK_OR,
 	TK_BANG,
 	TK_ASSIGN,
+	TK_AMP,
 	TK_LPAREN,
 	TK_RPAREN,
 	TK_LBRACE,
 	TK_RBRACE,
+	TK_LBRACKET,
+	TK_RBRACKET,
 	TK_SEMI,
 	TK_COMMA,
 	TK_EOF
@@ -65,6 +68,10 @@ typedef enum {
 	ND_ASSIGN,
 	ND_BIN,
 	ND_UN,
+	ND_DEREF,
+	ND_ADDR,
+	ND_INDEX,
+	ND_DEREF_ASSIGN,
 	ND_BLOCK,
 	ND_IF,
 	ND_WHILE,
@@ -80,17 +87,20 @@ typedef struct Nd {
 	char *s;
 	int slen;
 	int soff;
+	int ptr;
 	Tk op;
 	struct Nd *a, *b, *c;
 	struct Nd **ch;
 	int nch;
 	char **params;
+	int *parptrs;
 	int npar;
 } Nd;
 
 typedef struct {
 	char *name;
 	int off;
+	int ptr;
 } Loc;
 
 typedef struct {
@@ -100,6 +110,7 @@ typedef struct {
 	long cval;
 	int is_str;
 	int soff;
+	int ptr;
 } Glb;
 
 typedef struct {

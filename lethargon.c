@@ -196,6 +196,8 @@ static Tok lx_one(Lx *l) {
 	case ')': return make_tok(TK_RPAREN, ln);
 	case '{': return make_tok(TK_LBRACE, ln);
 	case '}': return make_tok(TK_RBRACE, ln);
+	case '[': return make_tok(TK_LBRACKET, ln);
+	case ']': return make_tok(TK_RBRACKET, ln);
 	case ';': return make_tok(TK_SEMI, ln);
 	case ',': return make_tok(TK_COMMA, ln);
 	case '!':
@@ -212,8 +214,7 @@ static Tok lx_one(Lx *l) {
 		return make_tok(TK_GT, ln);
 	case '&':
 		if (s[l->pos]=='&') { l->pos++; return make_tok(TK_AND, ln); }
-		dief("unexpected '&' on line %d", ln);
-		break;
+		return make_tok(TK_AMP, ln);
 	case '|':
 		if (s[l->pos]=='|') { l->pos++; return make_tok(TK_OR, ln); }
 		dief("unexpected '|' on line %d", ln);
@@ -330,7 +331,29 @@ static Nd *punary(Lx *l) {
 		n->a = punary(l);
 		return n;
 	}
-	return pprim(l);
+	if (check(l, TK_STAR)) {
+		lx_advance(l);
+		Nd *n = nd_new(ND_DEREF);
+		n->a = punary(l);
+		return n;
+	}
+	if (check(l, TK_AMP)) {
+		lx_advance(l);
+		Nd *n = nd_new(ND_ADDR);
+		n->a = punary(l);
+		return n;
+	}
+	Nd *base = pprim(l);
+	while (check(l, TK_LBRACKET)) {
+		lx_advance(l);
+		Nd *idx = pexpr(l);
+		expect(l, TK_RBRACKET);
+		Nd *n = nd_new(ND_INDEX);
+		n->a = base;
+		n->b = idx;
+		base = n;
+	}
+	return base;
 }
 
 static Nd *pmul(Lx *l) {
@@ -418,13 +441,21 @@ static Nd *por(Lx *l) {
 static Nd *pexpr(Lx *l) {
 	Nd *n = por(l);
 	if (check(l, TK_ASSIGN)) {
-		if (n->t != ND_ID) die("lhs of assignment must be identifier");
 		lx_advance(l);
-		Nd *r = nd_new(ND_ASSIGN);
-		r->s = n->s;
-		r->a = pexpr(l);
-		free(n);
-		return r;
+		if (n->t == ND_ID) {
+			Nd *r = nd_new(ND_ASSIGN);
+			r->s = n->s;
+			r->a = pexpr(l);
+			free(n);
+			return r;
+		}
+		if (n->t == ND_DEREF || n->t == ND_INDEX) {
+			Nd *r = nd_new(ND_DEREF_ASSIGN);
+			r->a = n;
+			r->b = pexpr(l);
+			return r;
+		}
+		die("invalid assignment target");
 	}
 	return n;
 }
@@ -443,10 +474,13 @@ static Nd *pstmt(Lx *l) {
 	Tok t = cur(l);
 	if (t.t == TK_INT) {
 		lx_advance(l);
+		int isptr = 0;
+		if (check(l, TK_STAR)) { lx_advance(l); isptr = 1; }
 		Tok nm = expect(l, TK_ID);
 		expect(l, TK_ASSIGN);
 		Nd *n = nd_new(ND_DECL);
 		n->s = nm.s;
+		n->ptr = isptr;
 		n->a = pexpr(l);
 		expect(l, TK_SEMI);
 		return n;
@@ -492,23 +526,31 @@ static Nd *pstmt(Lx *l) {
 }
 
 static Nd *ptoplevel(Lx *l) {
-	if (check(l, TK_INT) && l->peek.t == TK_ID) {
-		Tok ahead = l->peek;
-		(void)ahead;
+	if (check(l, TK_INT)) {
 		lx_advance(l);
+		int isptr = 0;
+		if (check(l, TK_STAR)) { lx_advance(l); isptr = 1; }
+		if (!check(l, TK_ID)) dief("expected identifier on line %d", l->cur.line);
 		Tok nm = expect(l, TK_ID);
 		if (check(l, TK_LPAREN)) {
 			lx_advance(l);
 			Nd *n = nd_new(ND_FN);
 			n->s = nm.s;
+			n->ptr = isptr;
 			n->params = NULL;
 			n->npar = 0;
+			n->parptrs = NULL;
 			if (!check(l, TK_RPAREN)) {
 				do {
 					expect(l, TK_INT);
+					int pp = 0;
+					if (check(l, TK_STAR)) { lx_advance(l); pp = 1; }
 					Tok p = expect(l, TK_ID);
 					n->params = realloc(n->params, (n->npar+1)*sizeof(char*));
-					n->params[n->npar++] = p.s;
+					n->parptrs = realloc(n->parptrs, (n->npar+1)*sizeof(int));
+					n->params[n->npar] = p.s;
+					n->parptrs[n->npar] = pp;
+					n->npar++;
 				} while (match(l, TK_COMMA));
 			}
 			expect(l, TK_RPAREN);
@@ -518,6 +560,7 @@ static Nd *ptoplevel(Lx *l) {
 		expect(l, TK_ASSIGN);
 		Nd *n = nd_new(ND_DECL);
 		n->s = nm.s;
+		n->ptr = isptr;
 		n->a = pexpr(l);
 		expect(l, TK_SEMI);
 		return n;
@@ -562,6 +605,7 @@ typedef struct {
 typedef struct {
 	char *names[MAX_LOCALS];
 	int offs[MAX_LOCALS];
+	int ptrs[MAX_LOCALS];
 	int n;
 	int frame_sz;
 } Lenv;
@@ -751,10 +795,11 @@ static int lenv_find(Lenv *e, const char *nm) {
 	return -9999;
 }
 
-static void lenv_add(Lenv *e, const char *nm, int off) {
+static void lenv_add(Lenv *e, const char *nm, int off, int ptr) {
 	if (e->n >= MAX_LOCALS) die("too many locals");
 	e->names[e->n] = strdup(nm);
 	e->offs[e->n] = off;
+	e->ptrs[e->n] = ptr;
 	e->n++;
 }
 
@@ -855,13 +900,13 @@ static Val var_lval(Cg2 *g, const char *nm, Lenv *env) {
 	return val_reg();
 }
 
-static void emit_fn_entry(Cg2 *g, Lenv *env, char **params, int npar) {
+static void emit_fn_entry(Cg2 *g, Lenv *env, char **params, int *parptrs, int npar) {
 	int i;
 	arm_push(g, FN_REGLIST);
 	arm_mov_rr(g, 11, 13);
 	for (i=0; i<npar; i++) {
 		int off = PARAM_BASE + i*4;
-		lenv_add(env, params[i], off);
+		lenv_add(env, params[i], off, parptrs ? parptrs[i] : 0);
 	}
 }
 
@@ -1032,6 +1077,72 @@ static Val gen_expr(Cg2 *g, Nd *n, Lenv *env) {
 		emit_call(g, n->ch, n->nch, env, n->s);
 		return val_reg();
 	}
+	case ND_DEREF: {
+		Val v = gen_expr(g, n->a, env);
+		val_rval(g, v);
+		arm_mov_rr(g, 1, 0);
+		A(g, 0xE5910000);
+		return val_reg();
+	}
+	case ND_ADDR: {
+		if (n->a->t != ND_ID) die("& requires identifier");
+		int lo = lenv_find(env, n->a->s);
+		if (lo != -9999) {
+			if (lo < 0) {
+				A(g, 0xE24B0000 | (uint32_t)(-lo));
+			} else {
+				A(g, 0xE28B0000 | (uint32_t)lo);
+			}
+			return val_reg();
+		}
+		int gi = g_find(g, n->a->s);
+		if (gi >= 0) {
+			Glb *gl = &g->glbs[gi];
+			if (gl->is_const && !gl->is_str) {
+				gl->is_const = 0;
+			}
+			arm_mov_r(g, 0, BSS_BASE + gl->goff);
+			return val_reg();
+		}
+		dief("undefined variable '%s'", n->a->s);
+		return val_reg();
+	}
+	case ND_INDEX: {
+		Val vp = gen_expr(g, n->a, env);
+		val_rval(g, vp);
+		arm_push1(g, 0);
+		Val vi = gen_expr(g, n->b, env);
+		val_rval(g, vi);
+		arm_pop1(g, 1);
+		A(g, 0xE0810100);
+		A(g, 0xE5900000);
+		return val_reg();
+	}
+	case ND_DEREF_ASSIGN: {
+		Val vval = gen_expr(g, n->b, env);
+		val_rval(g, vval);
+		arm_push1(g, 0);
+		Nd *lhs = n->a;
+		if (lhs->t == ND_DEREF) {
+			Val vp = gen_expr(g, lhs->a, env);
+			val_rval(g, vp);
+			arm_mov_rr(g, 1, 0);
+		} else if (lhs->t == ND_INDEX) {
+			Val vp = gen_expr(g, lhs->a, env);
+			val_rval(g, vp);
+			arm_push1(g, 0);
+			Val vi = gen_expr(g, lhs->b, env);
+			val_rval(g, vi);
+			arm_pop1(g, 1);
+			A(g, 0xE0810100);
+			arm_mov_rr(g, 1, 0);
+		} else {
+			die("deref_assign: bad lhs");
+		}
+		arm_pop1(g, 0);
+		A(g, 0xE5810000);
+		return val_reg();
+	}
 	default:
 		dief("gen_expr: unhandled node %d", n->t);
 	}
@@ -1046,14 +1157,11 @@ static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 		break;
 	}
 	case ND_DECL: {
-		if (!in_fn && n->a->t == ND_NUM) {
-			int gi = g_add(g, n->s, 1);
-			g->glbs[gi].cval = n->a->num;
-			g->glbs[gi].is_str = 0;
-		} else if (!in_fn && n->a->t == ND_STR) {
+		if (!in_fn && n->a->t == ND_STR && !n->ptr) {
 			int gi = g_add(g, n->s, 1);
 			g->glbs[gi].is_str = 1;
 			g->glbs[gi].soff = n->a->soff;
+			g->glbs[gi].ptr = 0;
 		} else {
 			Val v = gen_expr(g, n->a, env);
 			val_rval(g, v);
@@ -1062,9 +1170,10 @@ static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 				int off = -(env->frame_sz);
 				A(g, 0xE24DD004);
 				val_store(g, val_fp(off));
-				lenv_add(env, n->s, off);
+				lenv_add(env, n->s, off, n->ptr);
 			} else {
 				int gi = g_add(g, n->s, 0);
+				g->glbs[gi].ptr = n->ptr;
 				arm_mov_r(g, 1, BSS_BASE + g->glbs[gi].goff);
 				A(g, 0xE5810000);
 			}
@@ -1117,7 +1226,7 @@ static void gen_stmt(Cg2 *g, Nd *n, Lenv *env, int in_fn) {
 		g->nfn++;
 		Lenv fenv;
 		memset(&fenv, 0, sizeof(fenv));
-		emit_fn_entry(g, &fenv, n->params, n->npar);
+		emit_fn_entry(g, &fenv, n->params, n->parptrs, n->npar);
 		gen_stmt(g, n->a, &fenv, 1);
 		arm_mov_r(g, 0, 0);
 		emit_fn_exit(g, &fenv);
