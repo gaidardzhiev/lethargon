@@ -1074,6 +1074,33 @@ static Val gen_expr(Cg2 *g, Nd *n, Lenv *env) {
 			A(g, 0xE20000FF);
 			return val_reg();
 		}
+		if (!strcmp(n->s, "bload")) {
+			if (n->nch != 2) die("bload takes 2 arguments");
+			Val vp = gen_expr(g, n->ch[0], env);
+			val_rval(g, vp);
+			arm_push1(g, 0);
+			Val vi = gen_expr(g, n->ch[1], env);
+			val_rval(g, vi);
+			arm_pop1(g, 1);
+			A(g, 0xE7D10000);
+			return val_reg();
+		}
+		if (!strcmp(n->s, "bstore")) {
+			if (n->nch != 3) die("bstore takes 3 arguments");
+			Val vp = gen_expr(g, n->ch[0], env);
+			val_rval(g, vp);
+			arm_push1(g, 0);
+			Val vi = gen_expr(g, n->ch[1], env);
+			val_rval(g, vi);
+			arm_push1(g, 0);
+			Val vv = gen_expr(g, n->ch[2], env);
+			val_rval(g, vv);
+			arm_mov_rr(g, 2, 0);
+			arm_pop1(g, 1);
+			arm_pop1(g, 0);
+			A(g, 0xE7C02001);
+			return val_reg();
+		}
 		emit_call(g, n->ch, n->nch, env, n->s);
 		return val_reg();
 	}
