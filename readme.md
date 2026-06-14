@@ -18,7 +18,7 @@ int fact(int n) {
 }
 
 putint(fact(10));
-putint("\n");
+putstr("\n");
 ```
 
 [ptr.lt](src/ptr.lt):
@@ -26,10 +26,10 @@ putint("\n");
 int x = 99;
 int *p = &x;
 putint(*p);
-putint("\n");
+putstr("\n");
 *p = 42;
 putint(x);
-putint("\n");
+putstr("\n");
 ```
 Compile the compiler:
 ```sh
@@ -60,7 +60,7 @@ exit(0)                                 = ?
 +++ exited with 0 +++
 ```
 
-Keywords: `int`, `if`, `else`, `while`, `return`. Everything else is a function call or an operator. `putint` and `getc` are the two built-in I/O intrinsics. There is no standard library. There is no preprocessor. There is no separate compilation.
+Keywords: `int`, `if`, `else`, `while`, `return`. Everything else is a function call or an operator. `putint`, `putstr`, `getc`, `bload`, `bstore`, and `balloc` are built-in intrinsics. There is no standard library. There is no preprocessor. There is no separate compilation.
 
 Operators: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`, unary `-`, `&` (address-of), `*` (dereference), `[]` (index).
 
@@ -73,11 +73,19 @@ int *p = &x;     /* address of local or global */
 p[i]             /* index: equivalent to *(p + i*4) */
 ```
 
+Byte and heap operations:
+
+```c
+bload(p, i)      /* load byte at p[i] */
+bstore(p, i, v)  /* store byte v at p[i] */
+balloc(n)        /* bump allocate n bytes, returns pointer, arena lifetime */
+```
+
 Conditions are integers. Zero is false. Anything else is true. Exactly as in C.
 
 `else if` chains parse naturally. No special token needed.
 
-What is absent: structs, multiple types, `for`, `break`, `continue`, `switch`, a heap allocator, byte-level access, type checking, optimization. The language is minimal by design, not by accident. Each addition will be made when it is needed and not before.
+What is absent: structs, multiple types, `for`, `break`, `continue`, `switch`, type checking. The language is minimal by design, not by accident. Each addition will be made when it is needed and not before.
 
 ## The compiler
 
@@ -99,7 +107,7 @@ The runtime provides three internal functions: `__itoa`, `__out`, `__putstr`. Th
 
 ARM 32 bit is the architecture of the device this is written on. The constraint is real, not chosen for aesthetics. A language that runs on the machine in your pocket, compiled by a compiler that fits in two files, with no toolchain beyond a C compiler, is useful in a way that most [modern software](https://harmful.cat-v.org/software/) is not.
 
-The self hosting target is not distant. The language has pointers and array indexing. What remains is a static allocator and byte-level access. When those exist, the compiler can be written in Lethargon and the bootstrap chain becomes fully auditable from source to binary on a single device.
+The self hosting target is not distant. The language has pointers, array indexing, byte access, and a bump allocator. What remains is structs or a workable substitute to express the compiler's own data structures. When that exists, the compiler can be written in Lethargon and the bootstrap chain becomes fully auditable from source to binary on a single device.
 
 ## Status
 
@@ -109,6 +117,8 @@ The self hosting target is not distant. The language has pointers and array inde
 - [fact.lt](src/fact.lt): working (recursive factorial, the correctness baseline)
 - [ptr.lt](src/ptr.lt): working (address-of, dereference, store through pointer)
 - [arr.lt](src/arr.lt): working (array indexing through pointer, scaled by 4)
+- [bytes.lt](src/bytes.lt): working (byte-level read via bload)
+- [alloc.lt](src/alloc.lt): working (bump allocator, 64KB arena in BSS)
 - self hosting: in progress...
 
 ## License
