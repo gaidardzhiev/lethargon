@@ -20,4 +20,4 @@ install:
 	cp $(BIN) /usr/local/bin/$(BIN)
 
 clean:
-	rm -f $(BIN) src/*.out
+	rm -f $(BIN) src/*.out stage1/*.out
