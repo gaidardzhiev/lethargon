@@ -75,9 +75,11 @@ int streq(int a, int b) {
 	int i = 0;
 	int done = 0;
 	int res = 0;
+	int ca = 0;
+	int cb = 0;
 	while (done == 0) {
-		int ca = bload(a, i);
-		int cb = bload(b, i);
+		ca = bload(a, i);
+		cb = bload(b, i);
 		if (ca != cb) { res = 0; done = 1; }
 		else {
 			if (ca == 0) { res = 1; done = 1; }
@@ -105,13 +107,16 @@ int mktok(int type, int num, int str, int len, int line) {
 }
 
 int lx_one(int src, int *pos, int *line) {
-	putstr("lx_one entry\n");
-	putint(src);
-	putstr("\n");
-	putint(*pos);
-	putstr("\n");
 	int done = 0;
 	int c = 0;
+	int cc = 0;
+	int ln = 0;
+	int start = 0;
+	int len = 0;
+	int sc = 0;
+	int num = 0;
+	int id = 0;
+	int type = 0;
 	while (done == 0) {
 		c = bload(src, *pos);
 		while (isspace(c)) {
@@ -120,7 +125,7 @@ int lx_one(int src, int *pos, int *line) {
 			c = bload(src, *pos);
 		}
 		if (c == 35) {
-			int cc = bload(src, *pos);
+			cc = bload(src, *pos);
 			while (cc != 0) {
 				if (cc == 10) {
 					*pos = *pos + 1;
@@ -134,13 +139,13 @@ int lx_one(int src, int *pos, int *line) {
 			done = 1;
 		}
 	}
-	int ln = *line;
+	ln = *line;
 	if (c == 0) { return mktok(TK_EOF, 0, 0, 0, ln); }
 	if (c == 34) {
 		*pos = *pos + 1;
-		int start = *pos;
-		int len = 0;
-		int sc = bload(src, *pos);
+		start = *pos;
+		len = 0;
+		sc = bload(src, *pos);
 		while (sc != 0) {
 			if (sc != 34) {
 				if (sc == 92) { *pos = *pos + 1; }
@@ -155,7 +160,7 @@ int lx_one(int src, int *pos, int *line) {
 		return mktok(TK_STR, 0, src + start, len, ln);
 	}
 	if (isdigit(c)) {
-		int num = 0;
+		num = 0;
 		while (isdigit(bload(src, *pos))) {
 			num = num * 10 + bload(src, *pos) - 48;
 			*pos = *pos + 1;
@@ -163,11 +168,11 @@ int lx_one(int src, int *pos, int *line) {
 		return mktok(TK_NUM, num, 0, 0, ln);
 	}
 	if (isalpha(c)) {
-		int start = *pos;
+		start = *pos;
 		while (isalnum(bload(src, *pos))) { *pos = *pos + 1; }
-		int len = *pos - start;
-		int id = src + start;
-		int type = TK_ID;
+		len = *pos - start;
+		id = src + start;
+		type = TK_ID;
 		if (streq(id, kwint))    { type = TK_INT; }
 		if (streq(id, kwif))     { type = TK_IF; }
 		if (streq(id, kwelse))   { type = TK_ELSE; }
