@@ -129,7 +129,7 @@ One constraint shaped the design of all [stage1/](stage1/) code and must be resp
 - [arr.lt](src/arr.lt): working (array indexing through pointer, scaled by 4)
 - [bytes.lt](src/bytes.lt): working (byte-level read via bload)
 - [alloc.lt](src/alloc.lt): working (bump allocator, 64KB arena in BSS)
-- self hosting: in progress...
+- [stage1/](stage1/) self hosting in progress...
 
 ## License
 
