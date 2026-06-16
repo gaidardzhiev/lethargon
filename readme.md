@@ -109,6 +109,16 @@ ARM 32 bit is the architecture of the device this is written on. The constraint 
 
 The self hosting target is not distant. The language has pointers, array indexing, byte access, and a bump allocator. What remains is structs or a workable substitute to express the compiler's own data structures. When that exists, the compiler can be written in Lethargon and the bootstrap chain becomes fully auditable from source to binary on a single device.
 
+## Self hosting
+
+Self hosting means the compiler compiles its own source and produces a binary that can compile that same source again. The output must be bit-identical across generations. That is the only test that cannot be faked and the one this project is working toward.
+
+The bootstrap is built in three stages inside the [stage1/](stage1/) directory. [lex.lt](stage1/lex.lt) implements the lexer: a single `lx_one` function that consumes one token at a time from a byte buffer, identifies keywords via `streqn` against null terminated keyword strings, and returns a 20-byte token allocated from the bump arena. [parse.lt](stage1/parse.lt) contains the full lexer plus a recursive descent parser that produces a heap-allocated AST. Each node is a fixed 232-byte block with fields for type, a numeric value, a string pointer, three child slots, a variable-length child array capped at 16, and a parameter list capped at 16. No dynamic resizing. [codegen.lt](stage1/codegen.lt) will contain the ARM32 ELF emitter written in Lethargon, at which point the three files are concatenated with their test drivers stripped and a single entry point added at the bottom. The resulting [compiler.lt](stage1/compiler.lt) is compiled by the C host to produce `stage1/compiler.out`, which then compiles [compiler.lt](stage1/compiler.lt) itself. That is stage2. If stage2 output matches stage1 output byte for byte, self hosting is complete.
+
+There is no linker and none is needed. Lethargon has no separate compilation. The top level of a source file is sequential: globals and functions declared earlier are visible to everything that follows. Concatenation in dependency order is the link step. The only tool required is `cat`.
+
+One constraint shaped the design of all stage1 code and must be respected in any Lethargon source: all local variables must be declared at the top of a function before the first `if` or `while`. The C code generator tracks frame size by accumulating a counter at parse time. A local declared inside a conditional branch inflates that counter for all subsequent returns, including returns that never executed the branch. The stack unwind on those returns over adjusts `sp`, the `POP` loads garbage into `pc`, and the process segfaults. The fix in [lethargon.c](lethargon.c) is one instruction: replace `ADD sp, sp, #frame_sz` in `emit_fn_exit` with `MOV sp, fp`. That fix is deferred until the self hosting milestone is reached, at which point it will be one of the first things the self hosted compiler corrects in itself.
+
 ## Status
 
 - [hello.lt](src/hello.lt): working
