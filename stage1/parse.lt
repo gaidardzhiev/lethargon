@@ -245,9 +245,6 @@ int tok_str(int t)  { int *p = t; return p[2]; }
 int tok_len(int t)  { int *p = t; return p[3]; }
 int tok_line(int t) { int *p = t; return p[4]; }
 
-
-# ---------- lexer object ----------
-# lx: [src, pos, line, cur, peek]
 int LX_SRC  = 0;
 int LX_POS  = 4;
 int LX_LINE = 8;
@@ -316,22 +313,6 @@ int lexpect(int l, int t) {
 	lx_advance(l);
 	return tok;
 }
-
-# ---------- node layout ----------
-# [0]  type
-# [1]  num  (literal value or binary op token)
-# [2]  str  (identifier/name pointer)
-# [3]  slen
-# [4]  ptr  (isptr flag)
-# [5]  a
-# [6]  b
-# [7]  c
-# [8]  nch
-# [9..24]  ch[0..15]  (MAX_CH=16)
-# [25] npar
-# [26..41]  par_str[0..15]
-# [42..57]  par_ptr[0..15]
-# total = 58 words = 232 bytes
 
 int ND_NUM        = 0;
 int ND_STR        = 1;
@@ -739,8 +720,6 @@ int parse(int src) {
 	return prog;
 }
 
-# ---------- driver: parse fact.lt source and dump the AST ----------
-
 int nd_type_name(int t) {
 	if (t == ND_NUM)          { return "NUM"; }
 	if (t == ND_STR)          { return "STR"; }
@@ -794,5 +773,5 @@ int dump(int n, int depth) {
 
 int src = "int fact(int n) { if (n == 0) { return 1; } return n * fact(n - 1); }\nputint(fact(10));\nputstr(\"\n\");\n";
 int prog = parse(src);
-putstr("--- AST ---\n");
+putstr("!!! AST !!!\n");
 dump(prog, 0);
