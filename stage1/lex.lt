@@ -89,6 +89,26 @@ int streq(int a, int b) {
 	return res;
 }
 
+int streqn(int a, int b, int n) {
+	int i = 0;
+	int res = 0;
+	int done = 0;
+	int ca = 0;
+	int cb = 0;
+	while (done == 0) {
+		if (i == n) {
+			if (bload(b, i) == 0) { res = 1; } else { res = 0; }
+			done = 1;
+		} else {
+			ca = bload(a, i);
+			cb = bload(b, i);
+			if (ca != cb) { res = 0; done = 1; }
+			else { i = i + 1; }
+		}
+	}
+	return res;
+}
+
 int kwint    = "int";
 int kwif     = "if";
 int kwelse   = "else";
@@ -173,11 +193,11 @@ int lx_one(int src, int *pos, int *line) {
 		len = *pos - start;
 		id = src + start;
 		type = TK_ID;
-		if (streq(id, kwint))    { type = TK_INT; }
-		if (streq(id, kwif))     { type = TK_IF; }
-		if (streq(id, kwelse))   { type = TK_ELSE; }
-		if (streq(id, kwwhile))  { type = TK_WHILE; }
-		if (streq(id, kwreturn)) { type = TK_RETURN; }
+		if (streqn(id, kwint, len))    { type = TK_INT; }
+		if (streqn(id, kwif, len))     { type = TK_IF; }
+		if (streqn(id, kwelse, len))   { type = TK_ELSE; }
+		if (streqn(id, kwwhile, len))  { type = TK_WHILE; }
+		if (streqn(id, kwreturn, len)) { type = TK_RETURN; }
 		return mktok(type, 0, id, len, ln);
 	}
 	*pos = *pos + 1;
