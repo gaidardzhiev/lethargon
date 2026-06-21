@@ -121,15 +121,16 @@ One constraint shaped the design of all [stage1/](stage1/) code and must be resp
 
 ## Status
 
-- [hello.lt](src/hello.lt): working
-- [vars.lt](src/vars.lt): working
-- [loop.lt](src/loop.lt): working (while loop, global state)
-- [fact.lt](src/fact.lt): working (recursive factorial, the correctness baseline)
-- [ptr.lt](src/ptr.lt): working (address-of, dereference, store through pointer)
-- [arr.lt](src/arr.lt): working (array indexing through pointer, scaled by 4)
-- [bytes.lt](src/bytes.lt): working (byte-level read via bload)
-- [alloc.lt](src/alloc.lt): working (bump allocator, 64KB arena in BSS)
-- [stage1/](stage1/) self hosting in progress...
+- [hello.lt](src/hello.lt): print a string literal stored in a global variable
+- [vars.lt](src/vars.lt): global variables and integer arithmetic
+- [loop.lt](src/loop.lt): while loop, global state
+- [fact.lt](src/fact.lt): recursive factorial, the correctness baseline
+- [ptr.lt](src/ptr.lt): address of, dereference, store through pointer
+- [arr.lt](src/arr.lt): array indexing through pointer, scaled by 4)
+- [bytes.lt](src/bytes.lt): byte level read via bload
+- [alloc.lt](src/alloc.lt): bump allocator, 64KB arena in BSS
+- [stage1/lexer.lt](stage1/lexer.lt): tokenizer, lx_* stream, strings, numbers, ids, operators
+- [stage1/parser.lt](stage1/parser.lt): recursive descent parser, ND_* AST, functions and control flow
 
 ## License
 
